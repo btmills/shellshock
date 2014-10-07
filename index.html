@@ -55,7 +55,7 @@
 				<section>
 					<img src="img/terminal-icon.png" class="hero" />
 
-					<h2>Bash</h2>
+					<h1 class="fragment">1989</h1>
 				</section>
 
 				<section>
@@ -65,40 +65,133 @@
 				</section>
 
 				<section>
-					<h2><abbr title="Common Vulnerabilities and Exposures">CVE</abbr>-2014-6271</h2>
+					<section>
+						<h2><abbr title="Common Vulnerabilities and Exposures">CVE</abbr>-2014-6271</h2>
 
-					<p>the original Shellshock</p>
+						<p>the original Shellshock</p>
 
-					<pre><code data-trim>
+						<pre><code data-trim>
 $ env x='() { :;}; echo vulnerable' bash -c "echo this is a test"
 vulnerable
 this is a test
-					</code></pre>
-				</section>
+						</code></pre>
+					</section>
 
-				<section>
-					<h2><abbr title="Common Vulnerabilities and Exposures">CVE</abbr>-2014-7169</h2>
+					<section>
+						<h2><abbr title="Common Vulnerabilities and Exposures">CVE</abbr>-2014-7169</h2>
 
-					<p>aka <em>AfterShock</em></p>
+						<p>aka <em>AfterShock</em></p>
 
-					<pre><code data-trim>
+						<pre><code data-trim>
 $ env var='() {(a)=>\' bash -c "echo date"; cat echo
 bash: var: line 1: syntax error near unexpected token `='
 bash: var: line 1: `'
 bash: error importing function definition for `var'
 Tue Oct  7 02:09:01 EDT 2014
-					</code></pre>
+						</code></pre>
+					</section>
+
+					<section>
+						<h2><abbr title="Common Vulnerabilities and Exposures">CVE</abbr>-2014-6277</h2>
+
+						<p>still not fixed</p>
+
+						<pre><code data-trim>
+$ var='() { echo vulnerable; }' bash -c var
+vulnerable
+						</code></pre>
+					</section>
 				</section>
 
 				<section>
-					<h2><abbr title="Common Vulnerabilities and Exposures">CVE</abbr>-2014-6277</h2>
 
-					<p>still not fixed</p>
+					<section data-markdown>
+						<script type="text/template">
+						```diff
+diff --git a/builtins/common.h b/builtins/common.h
+index b0c2f7d..cae16b1 100644
+--- a/builtins/common.h
++++ b/builtins/common.h
+@@ -33,6 +33,8 @@
+ #define SEVAL_RESETLINE	0x010
+ #define SEVAL_PARSEONLY	0x020
+ #define SEVAL_NOLONGJMP 0x040
++#define SEVAL_FUNCDEF	0x080		/* only allow function definitions */
++#define SEVAL_ONECMD	0x100		/* only allow a single command */
 
-					<pre><code data-trim>
-$ var='() { echo vulnerable; }' bash -c var
-vulnerable
-					</code></pre>
+ /* Flags for describe_command, shared between type.def and command.def */
+ #define CDESC_ALL		0x001	/* type -a */
+```
+	 					</script>
+	 				</section>
+
+					<section data-markdown>
+						<script type="text/template">
+						```diff
+diff --git a/variables.c b/variables.c
+index cdc54bc..92a5a10 100644
+--- a/variables.c
++++ b/variables.c
+@@ -358,13 +358,11 @@ initialize_shell_variables (env, privmode)
+ 	  temp_string[char_index] = ' ';
+ 	  strcpy (temp_string + char_index + 1, string);
+
+-	  if (posixly_correct == 0 || legal_identifier (name))
+-	    parse_and_execute (temp_string, name, SEVAL_NONINT|SEVAL_NOHIST);
++	  /* Don't import function names that are invalid identifiers from the
++	     environment, though we still allow them to be defined as shell
++	     variables. */
++	  if (legal_identifier (name))
++	    parse_and_execute (temp_string, name, SEVAL_NONINT|SEVAL_NOHIST|SEVAL_FUNCDEF|SEVAL_ONECMD);
+
+ 	  if (temp_var = find_function (name))
+ 	    {
+ ```
+	 					</script>
+	 				</section>
+
+					<section data-markdown>
+						<script type="text/template">
+						```diff
+diff --git a/builtins/evalstring.c b/builtins/evalstring.c
+index ce5b4d6..21937ba 100644
+--- a/builtins/evalstring.c
++++ b/builtins/evalstring.c
+@@ -308,6 +308,14 @@ parse_and_execute (string, from_file, flags)
+ 	    {
+ 	      struct fd_bitmap *bitmap;
+
++	      if ((flags & SEVAL_FUNCDEF) && command->type != cm_function_def)
++		{
++		  internal_warning ("%s: ignoring function definition attempt", from_file);
++		  should_jump_to_top_level = 0;
++		  last_result = last_command_exit_value = EX_BADUSAGE;
++		  break;
++		}
++
+ 	      bitmap = new_fd_bitmap (FD_BITMAP_SIZE);
+ 	      begin_unwind_frame ("pe_dispose");
+ 	      add_unwind_protect (dispose_fd_bitmap, bitmap);
+@@ -368,6 +376,9 @@ parse_and_execute (string, from_file, flags)
+ 	      dispose_command (command);
+ 	      dispose_fd_bitmap (bitmap);
+ 	      discard_unwind_frame ("pe_dispose");
++
++	      if (flags & SEVAL_ONECMD)
++		break;
+ 	    }
+ 	}
+       else
+```
+	 					</script>
+	 				</section>
+
+	 			</section>
+
+				<section data-markdown>
+					<script type="text/template">
+						![CloudeFlare](img/cloudflare.png)
+					</script>
 				</section>
 
 				<section data-markdown>
@@ -121,6 +214,9 @@ vulnerable
 						- http://www.softicons.com/toolbar-icons/programmers-pack-icons-by-iconshock/linux-icon
 						- http://cdn.iphonehacks.com/wp-content/uploads/2014/06/finder-icon.png
 						- http://darkfall.me/
+						- https://community.qualys.com/blogs/securitylabs/2014/09/24/bash-remote-code-execution-vulnerability-cve-2014-6271
+						- http://unix.stackexchange.com/questions/157381/when-was-the-shellshock-cve-2014-6271-7169-bug-introduced-and-what-is-the-pat/157495#157495
+						- git://git.savannah.gnu.org/bash.git
 					</script>
 				</section>
 
